@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { getDatabase } from './database/db';
+import { theme } from './utils/colors';
 
 export default function Index() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#000000" />
+      <ActivityIndicator size="large" color={theme.button.primary} />
     </View>
   );
 }
@@ -41,7 +42,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.background,
     justifyContent: 'center',
     alignItems: 'center',
   },

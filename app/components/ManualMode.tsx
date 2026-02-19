@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,21 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runSearch, SearchResultItem, AssociationLevel } from '../services/searchService';
+import { markItemDeleted, getDatabase } from '../database/db';
+import * as FileSystem from 'expo-file-system';
+import { theme } from '../utils/colors';
+
+const SWIPE_THRESHOLD = -80;
 
 export default function ManualMode() {
   const [searchText, setSearchText] = useState('');
@@ -44,29 +57,26 @@ export default function ManualMode() {
     }
   };
 
+  const handleRemove = useCallback(async (item: SearchResultItem) => {
+    try {
+      if (item.sourceType === 'file' && item.openRef.localPath) {
+        const fileInfo = await FileSystem.getInfoAsync(item.openRef.localPath);
+        if (fileInfo.exists) {
+          await FileSystem.deleteAsync(item.openRef.localPath);
+        }
+      }
+
+      await markItemDeleted(item.itemId);
+
+      setResults(prev => prev.filter(r => r.itemId !== item.itemId));
+    } catch (error) {
+      console.error('Error removing item:', error);
+      Alert.alert('Error', 'Failed to remove item');
+    }
+  }, []);
+
   const renderItem = ({ item }: { item: SearchResultItem }) => (
-    <TouchableOpacity style={styles.resultItem} activeOpacity={0.7}>
-      <View style={styles.resultContent}>
-        <View style={styles.resultHeader}>
-          <Text style={styles.resultTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={styles.resultType}>
-            {item.sourceType === 'photo' ? '📷' : '📄'}
-          </Text>
-        </View>
-
-        {item.snippet && (
-          <Text style={styles.resultSnippet} numberOfLines={2}>
-            {item.snippet}
-          </Text>
-        )}
-
-        <Text style={styles.resultDate}>
-          {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Unknown date'}
-        </Text>
-      </View>
-    </TouchableOpacity>
+    <SwipeableItem item={item} onRemove={() => handleRemove(item)} />
   );
 
   return (
@@ -77,7 +87,7 @@ export default function ManualMode() {
           value={searchText}
           onChangeText={handleSearch}
           placeholder="Search..."
-          placeholderTextColor="#999999"
+          placeholderTextColor={theme.text.secondary}
         />
       </View>
 
@@ -108,7 +118,7 @@ export default function ManualMode() {
 
       {isSearching ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#000000" />
+          <ActivityIndicator size="large" color={theme.button.primary} />
         </View>
       ) : (
         <FlatList
@@ -119,16 +129,102 @@ export default function ManualMode() {
           ListEmptyComponent={
             searchText ? (
               <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>📭</Text>
                 <Text style={styles.emptyText}>No results found</Text>
+                <Text style={styles.emptySubtext}>Try adjusting your search or filters</Text>
               </View>
             ) : (
               <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>🔎</Text>
                 <Text style={styles.emptyText}>Start typing to search</Text>
               </View>
             )
           }
         />
       )}
+    </View>
+  );
+}
+
+function SwipeableItem({
+  item,
+  onRemove,
+}: {
+  item: SearchResultItem;
+  onRemove: () => void;
+}) {
+  const translateX = useSharedValue(0);
+  const [isRemoving, setIsRemoving] = useState(false);
+
+  const panGesture = Gesture.Pan()
+    .onUpdate(e => {
+      if (e.translationX < 0) {
+        translateX.value = Math.max(e.translationX, SWIPE_THRESHOLD * 1.5);
+      }
+    })
+    .onEnd(() => {
+      if (translateX.value < SWIPE_THRESHOLD) {
+        translateX.value = withTiming(SWIPE_THRESHOLD);
+        runOnJS(setIsRemoving)(true);
+      } else {
+        translateX.value = withTiming(0);
+      }
+    });
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const handleRemovePress = () => {
+    translateX.value = withTiming(-400);
+    setTimeout(onRemove, 300);
+  };
+
+  return (
+    <View style={styles.swipeableContainer}>
+      <View style={styles.deleteBackground}>
+        {isRemoving && (
+          <TouchableOpacity style={styles.deleteButton} onPress={handleRemovePress}>
+            <Text style={styles.deleteButtonText}>Remove</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <GestureDetector gesture={panGesture}>
+        <Animated.View style={[styles.resultItem, animatedStyle]}>
+          <View style={styles.resultContent}>
+            <View style={styles.resultHeader}>
+              <Text style={styles.resultTitle} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <View style={styles.typeIcon}>
+                <Text style={styles.typeIconText}>
+                  {item.sourceType === 'photo' ? '📷' : '📄'}
+                </Text>
+              </View>
+            </View>
+
+            {item.snippet && (
+              <Text style={styles.resultSnippet} numberOfLines={2}>
+                {item.snippet}
+              </Text>
+            )}
+
+            <View style={styles.resultFooter}>
+              <Text style={styles.resultDate}>
+                {item.createdAt
+                  ? new Date(item.createdAt).toLocaleDateString()
+                  : 'Unknown date'}
+              </Text>
+              <View style={styles.scoreBadge}>
+                <Text style={styles.scoreBadgeText}>
+                  {Math.round(item.score * 100)}% match
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+      </GestureDetector>
     </View>
   );
 }
@@ -140,19 +236,23 @@ const styles = StyleSheet.create({
   searchContainer: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: theme.border.light,
+    backgroundColor: theme.surface,
   },
   searchInput: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
+    borderWidth: 1,
+    borderColor: theme.border.light,
   },
   filtersContainer: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: theme.border.light,
+    backgroundColor: theme.surface,
   },
   associationSlider: {
     flexDirection: 'row',
@@ -160,27 +260,30 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
+    fontWeight: '700',
+    color: theme.text.primary,
     marginRight: 12,
   },
   sliderButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    backgroundColor: theme.background,
     marginRight: 8,
+    borderWidth: 1,
+    borderColor: theme.border.light,
   },
   sliderButtonActive: {
-    backgroundColor: '#000000',
+    backgroundColor: theme.button.primary,
+    borderColor: theme.button.primary,
   },
   sliderButtonText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#666666',
+    fontWeight: '600',
+    color: theme.text.secondary,
   },
   sliderButtonTextActive: {
-    color: '#ffffff',
+    color: theme.button.primaryText,
   },
   loadingContainer: {
     flex: 1,
@@ -190,13 +293,41 @@ const styles = StyleSheet.create({
   resultsList: {
     padding: 16,
   },
+  swipeableContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  deleteBackground: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 100,
+    backgroundColor: theme.status.error,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  deleteButtonText: {
+    color: theme.text.inverse,
+    fontSize: 14,
+    fontWeight: '700',
+  },
   resultItem: {
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.surface,
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: theme.border.light,
+    shadowColor: theme.primary.voidBlack,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   resultContent: {
     flex: 1,
@@ -209,30 +340,66 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
+    fontWeight: '700',
+    color: theme.text.primary,
     flex: 1,
   },
-  resultType: {
-    fontSize: 20,
+  typeIcon: {
     marginLeft: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: theme.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  typeIconText: {
+    fontSize: 16,
   },
   resultSnippet: {
     fontSize: 14,
-    color: '#666666',
-    marginBottom: 8,
+    color: theme.text.secondary,
+    marginBottom: 12,
     lineHeight: 20,
+  },
+  resultFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   resultDate: {
     fontSize: 12,
-    color: '#999999',
+    color: theme.text.secondary,
+  },
+  scoreBadge: {
+    backgroundColor: theme.background,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: theme.button.primary,
+  },
+  scoreBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.button.primary,
   },
   emptyContainer: {
-    paddingTop: 60,
+    paddingTop: 80,
     alignItems: 'center',
   },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
   emptyText: {
-    fontSize: 16,
-    color: '#999999',
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.text.primary,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: theme.text.secondary,
   },
 });

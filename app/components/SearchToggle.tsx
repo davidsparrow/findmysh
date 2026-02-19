@@ -1,5 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SearchMode } from '../stores/appStore';
+import { theme } from '../utils/colors';
 
 interface SearchToggleProps {
   mode: SearchMode;
@@ -9,7 +10,10 @@ interface SearchToggleProps {
 export default function SearchToggle({ mode, onToggle }: SearchToggleProps) {
   return (
     <View style={styles.container}>
-      <Text style={styles.logo}>findmysh</Text>
+      <View style={styles.logoContainer}>
+        <Text style={styles.logo}>findmysh</Text>
+        <View style={styles.logoAccent} />
+      </View>
 
       <View style={styles.toggleContainer}>
         <TouchableOpacity
@@ -42,31 +46,45 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   logo: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#000000',
+    fontWeight: '800',
+    color: theme.text.primary,
+    letterSpacing: -0.5,
+  },
+  logoAccent: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.button.primary,
   },
   toggleContainer: {
     flexDirection: 'row',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    padding: 2,
+    backgroundColor: theme.surface,
+    borderRadius: 10,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: theme.border.light,
   },
   toggleButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   toggleButtonActive: {
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.button.primary,
   },
   toggleText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#666666',
+    fontWeight: '600',
+    color: theme.text.secondary,
   },
   toggleTextActive: {
-    color: '#000000',
+    color: theme.button.primaryText,
   },
 });
