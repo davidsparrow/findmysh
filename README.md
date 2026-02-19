@@ -1,0 +1,2 @@
+# findmysh ishhh
+expo app
