@@ -1,4 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SearchMode } from '../stores/appStore';
 import { theme } from '../utils/colors';
 
@@ -8,6 +9,8 @@ interface SearchToggleProps {
 }
 
 export default function SearchToggle({ mode, onToggle }: SearchToggleProps) {
+  const router = useRouter();
+
   return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
@@ -15,7 +18,8 @@ export default function SearchToggle({ mode, onToggle }: SearchToggleProps) {
         <View style={styles.logoAccent} />
       </View>
 
-      <View style={styles.toggleContainer}>
+      <View style={styles.rightSection}>
+        <View style={styles.toggleContainer}>
         <TouchableOpacity
           style={[styles.toggleButton, mode === 'chat' && styles.toggleButtonActive]}
           onPress={() => onToggle('chat')}
@@ -35,6 +39,15 @@ export default function SearchToggle({ mode, onToggle }: SearchToggleProps) {
             Manual
           </Text>
         </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity
+        style={styles.settingsButton}
+        onPress={() => router.push('/settings')}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.settingsIcon}>⚙</Text>
+      </TouchableOpacity>
       </View>
     </View>
   );
@@ -63,6 +76,11 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: theme.button.primary,
   },
+  rightSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   toggleContainer: {
     flexDirection: 'row',
     backgroundColor: theme.surface,
@@ -86,5 +104,18 @@ const styles = StyleSheet.create({
   },
   toggleTextActive: {
     color: theme.button.primaryText,
+  },
+  settingsButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: theme.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.border.light,
+  },
+  settingsIcon: {
+    fontSize: 18,
   },
 });

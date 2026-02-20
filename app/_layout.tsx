@@ -35,6 +35,7 @@ export default function RootLayout() {
         <Stack.Screen name="welcome" />
         <Stack.Screen name="indexing" />
         <Stack.Screen name="search" />
+        <Stack.Screen name="settings" />
       </Stack>
     </GestureHandlerRootView>
   );
