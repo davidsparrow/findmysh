@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -10,12 +11,21 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   useEffect(() => {
     async function prepare() {
+      console.log('[Layout] prepare() start, platform:', Platform.OS);
       try {
-        await initDatabase();
+        if (Platform.OS !== 'web') {
+          console.log('[Layout] initializing SQLite database...');
+          await initDatabase();
+          console.log('[Layout] database initialized');
+        } else {
+          console.log('[Layout] skipping SQLite init on web');
+        }
       } catch (error) {
-        console.error('Failed to initialize database:', error);
+        console.error('[Layout] Failed to initialize database:', error);
       } finally {
+        console.log('[Layout] hiding splash screen');
         await SplashScreen.hideAsync();
+        console.log('[Layout] splash screen hidden');
       }
     }
 
